@@ -10,6 +10,7 @@ from pprint import pprint
 import hashlib
 from optparse import OptionParser
 import string
+from collections import OrderedDict
 try:
     import re2 as re
 except ImportError:
@@ -22,10 +23,11 @@ parser.add_option("-n", dest="nlist", type="string", help="ngram csv count to ge
 parser.add_option("-P", dest="i_re", type="string", help="Ngram must match this regex to be included in the output")
 parser.add_option("-v", dest="e_re", type="string", help="Ngram matching this regex will not be included in the output")
 parser.add_option("-g", dest="do_reass", help="Generate a regex string provide path to regex assemble perl script")
+parser.add_option("-r", dest="reduce", action='store_true', help="Reduce matches to globally unique")
 (options, args) = parser.parse_args()
 
 flist = []
-gcracker = {}
+gcracker = OrderedDict() 
 nlist = set()
 ngram_cnt = {}
 include_regex = None
@@ -60,7 +62,7 @@ if(options.nlist):
         print("You got problems BRO %s" % (e))
         sys.exit(-1)    
 else:
-    nlist = [100,75,50,20,10,9,8,7,6,5,4,3]
+    nlist = [100,75,50,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3]
 
 if(options.i_re):
     try:
@@ -82,13 +84,14 @@ if(options.do_reass):
     else:
         print "Warning: not performing regex reasssmble no reass.pl found"
     
+nlist.sort(reverse=True)
 
 if nlist and flist:
     if len(flist) > 1:
         for entry in flist:
             dapoop=open(entry).read()
             key = os.path.basename(entry)
-            gcracker[key]={}
+            gcracker[key]=OrderedDict()
             for i in nlist:
                 tmpset=set()
                 tgrams=ngrams(dapoop, i)
@@ -103,9 +106,16 @@ if nlist and flist:
 
 elif nlist and options.input_file and os.path.exists(options.input_file):
     lines=open(options.input_file).readlines()
+    if not lines:
+        print "empty input file exiting"
+        sys.exit(-1)
+    lines = sorted(lines, key=len)
+    print("The number of lines in the list is: %s." % (len(lines)))
+    print("The shortest line in the list is: %s." % (len(lines[0])))
+    print("The longest line in the list is: %s." % (len(lines[-1])))
     key = 0
     for dapoop in lines:
-        gcracker[key]={}
+        gcracker[key]=OrderedDict()
         for i in nlist:
             tmpset=set()
             tgrams=ngrams(dapoop.strip(), i)
@@ -114,14 +124,29 @@ elif nlist and options.input_file and os.path.exists(options.input_file):
             gcracker[key][i]=tmpset
         key = key + 1
 
+all_list = []
 if nlist and gcracker:    
     for i in nlist:
-        print("Ngrams of len:%s" % (i))
         setlst = []
         for key in gcracker:
             setlst.append(gcracker[key][i])        
         s1=set.intersection(*setlst)
         cset=set()
+        if options.reduce:
+            tmp_set=set()
+            for entry in s1:
+                found = False
+                for entry2 in all_list:
+                    if entry in entry2:       
+    #                    print("skipping %s found in larger string %s" % (entry,entry2)) 
+                        found = True
+                        break
+                if not found:
+                   tmp_set.add(entry)
+                   all_list.append(entry)
+            s1=tmp_set
+        if s1:
+            print("Ngrams of len:%s" % (i))
         for entry in s1:
            if include_regex and include_regex.search(entry) != None:
                if exclude_regex and exclude_regex.search(entry) != None:
@@ -156,7 +181,7 @@ if nlist and gcracker:
             unique_chars +=v
         if unique_chars:
             print ("unique_chars \"[%s]\"\n" % (replchars.sub(replchars_to_hex, unique_chars)))
-   
+
 if reass_in:
     f = open("rescaped.txt",'w')
     f.writelines(reass_in)
